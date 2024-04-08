@@ -1,6 +1,6 @@
 all:
-	gcc -g server.c -o server
-	gcc -g client.c -o client
+	gcc -g server.c world.c player.c -o server
+	gcc -g client.c -o client -lSDL2
 
-format:
-	clang-format -style=file -i server.c client.c
+clean:
+	rm server client
