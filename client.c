@@ -265,57 +265,5 @@ int main(int argc, char* argv[])
     connect_to_server(argc, argv);
     loop();
 
-    size_t len;
-    ssize_t nread;
-    char buf[BUF_SIZE];
-
-    /* Send remaining command-line arguments as separate
-       datagrams, and read responses from server */
-
-    for (int j = 3; j < argc; j++)
-    {
-        //for (int foo = 0; foo < 1000000; foo++)
-        //{
-            len = strlen(argv[j]) + 1;
-            /* +1 for terminating null byte */
-
-            if (len > BUF_SIZE)
-            {
-                fprintf(stderr, "Ignoring long message in argument %d\n", j);
-                continue;
-            }
-
-            if (write(sfd, argv[j], len) != len)
-            {
-                fprintf(stderr, "partial/failed write\n");
-                exit(EXIT_FAILURE);
-            }
-
-            printf("sleep\n");
-            sleep(1);
-            printf("wakey\n");
-            struct sockaddr_storage peer_addr;
-            socklen_t peer_addr_len;
-            nread = recvfrom(sfd, buf, BUF_SIZE, MSG_DONTWAIT, (struct sockaddr*)&peer_addr, &peer_addr_len);
-            if (nread == -1)
-            {
-                perror("read");
-                exit(EXIT_FAILURE);
-            }
-
-            printf("Received %zd bytes: %s\n", nread, buf);
-            printf("waiting for response\n");
-            nread = recvfrom(sfd, buf, BUF_SIZE, MSG_DONTWAIT, (struct sockaddr*)&peer_addr, &peer_addr_len);
-            printf("stopped waiting\n");
-            if (nread == -1)
-            {
-                perror("read foo");
-//                exit(EXIT_FAILURE);
-            }
-            else
-            printf("Received %zd bytes: %s\n", nread, buf);
-        //}
-    }
-
     exit(EXIT_SUCCESS);
 }

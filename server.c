@@ -14,9 +14,9 @@
 
 int sfd;
 struct player_t* players[MAX_PLAYERS];
-char ips[MAX_PLAYERS][NI_MAXHOST+NI_MAXSERV+1];
+char player_inputs[MAX_PLAYERS];
 struct sockaddr_storage* peers_addr[MAX_PLAYERS];
-socklen_t peer_addr_len;
+socklen_t peers_addr_len[MAX_PLAYERS];
 
 // returns port
 int check_arguments(int argc, char* argv[])
@@ -61,7 +61,7 @@ int find_id()
 {
     for (int i = 0; i < MAX_PLAYERS; ++i)
     {
-        if (strcmp(ips[i], "") == 0)
+        if (peers_addr[i] == NULL)
         {
             return i;
         }
@@ -69,7 +69,7 @@ int find_id()
     return -1;
 }
 
-void handle_join(struct datagram_t request, struct sockaddr_storage* peer_addr, socklen_t peer_addr_len, char (*host)[NI_MAXHOST], char (*service)[NI_MAXSERV])
+void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
 {
     struct datagram_t datagram;
     datagram.type = JOIN_APPROVAL;
@@ -80,8 +80,9 @@ void handle_join(struct datagram_t request, struct sockaddr_storage* peer_addr, 
         perror("failed");
         exit(1);
     }
-    peers_addr[id] = peer_addr;
-    sprintf(ips[id], "%s:%s", *host, *service);
+    peers_addr[id] = malloc(sizeof(struct sockaddr_storage));
+    memcpy(peers_addr[id], peer_addr, sizeof *peer_addr);
+    peers_addr_len[id] = peer_addr_len;
     players[id] = calloc(1, sizeof(struct player_t));
     players[id]->x = 0;
     players[id]->y = 0;
@@ -91,58 +92,97 @@ void handle_input(struct datagram_t datagram)
 {
     unsigned int id = datagram.data.input.id;
     char input = datagram.data.input.input;
-    if (id == 1)
-    printf("input time %d from %d\n", datagram.data.input.timestamp, id);
-    if (players[id])
-    {
-        if (input & UP)
-            players[id]->y--;
-        if (input & DOWN)
-            players[id]->y++;
-        if (input & LEFT)
-            players[id]->x--;
-        if (input & RIGHT)
-            players[id]->x++;
-    }
+    player_inputs[id] = input;
 }
 
 void handle_network()
 {
     int s;
-    ssize_t nread;
+    ssize_t nread = 0;
     struct sockaddr_storage peer_addr;
     struct datagram_t request;
-    peer_addr_len = sizeof(peer_addr);
+    socklen_t peer_addr_len = sizeof peer_addr;
 
-
-    nread = recvfrom(sfd, &request, sizeof request, 0, (struct sockaddr*)&peer_addr, &peer_addr_len);
-    if (nread == -1) return;
-
-    char host[NI_MAXHOST], service[NI_MAXSERV];
-
-    s = getnameinfo((struct sockaddr*)&peer_addr, peer_addr_len, host, NI_MAXHOST, service, NI_MAXSERV, NI_NUMERICSERV);
-    if (s == 0)
+    while (nread != -1)
     {
-        switch (request.type)
+        nread = recvfrom(sfd, &request, sizeof request, MSG_DONTWAIT, (struct sockaddr*)&peer_addr, &peer_addr_len);
+        if (nread == -1)
         {
-        case JOIN_REQUEST:
-            printf("Received %zd bytes from %s:%s\n", nread, host, service);
-            handle_join(request, &peer_addr, peer_addr_len, &host, &service);
-            break;
-        case INPUT:
-            handle_input(request);
-            break;
-/*            case PLAYER_UPDATE:
-            break;
-        case JOIN_REQUEST:
-            break;
-        case JOIN_REFUSE:
-            break;*/
+            return;
+        }
+
+        char host[NI_MAXHOST], service[NI_MAXSERV];
+
+        s = getnameinfo((struct sockaddr*)&peer_addr, peer_addr_len, host, NI_MAXHOST, service, NI_MAXSERV, NI_NUMERICSERV);
+        if (s == 0)
+        {
+            switch (request.type)
+            {
+            case JOIN_REQUEST:
+                printf("Received %zd bytes from %s:%s\n", nread, host, service);
+                handle_join(&peer_addr, peer_addr_len);
+                break;
+            case INPUT:
+                handle_input(request);
+                break;
+                /*            case PLAYER_UPDATE:
+                            break;
+                        case JOIN_REQUEST:
+                            break;
+                        case JOIN_REFUSE:
+                            break;*/
+            }
+        }
+        else
+        {
+            fprintf(stderr, "getnameinfo: %s\n", gai_strerror(s));
         }
     }
-    else
+}
+
+void update_players()
+{
+    for (int j = 0; j < MAX_PLAYERS; j++)
     {
-        fprintf(stderr, "getnameinfo: %s\n", gai_strerror(s));
+        if (peers_addr[j] != NULL)
+        {
+            for (int i = 0; i < MAX_PLAYERS; ++i)
+            {
+                if (players[i])
+                {
+                    struct datagram_t datagram;
+                    datagram.type = PLAYER_UPDATE;
+                    datagram.data.update.id = i;
+                    datagram.data.update.timestamp = 0;
+                    datagram.data.update.pos_x = players[i]->x;
+                    datagram.data.update.pos_y = players[i]->y;
+
+                    if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[j], peers_addr_len[j]) != sizeof(struct datagram_t))
+                    {
+                        perror("failed to send");
+                    }
+                }
+            }
+        }
+    }
+}
+
+void game_tick()
+{
+    for (int i = 0; i < MAX_PLAYERS; ++i)
+    {
+        if (players[i])
+        {
+            char input = player_inputs[i];
+            if (input & UP)
+                players[i]->y--;
+            if (input & DOWN)
+                players[i]->y++;
+            if (input & LEFT)
+                players[i]->x--;
+            if (input & RIGHT)
+                players[i]->x++;
+        }
     }
 }
 
@@ -151,35 +191,9 @@ void loop()
     for (;;)
     {
         handle_network();
-
-        for (int j = 0; j < MAX_PLAYERS; j++)
-        {
-            if (peers_addr[j] != NULL)
-            {
-                for (int i = 0; i < MAX_PLAYERS; ++i)
-                {
-                    if (players[i])
-                    {
-                        struct datagram_t datagram;
-                        datagram.type = PLAYER_UPDATE;
-                        datagram.data.update.id = i; // = {i, 0, players[i].x, players[i].y};
-                        datagram.data.update.timestamp = 0;
-                        datagram.data.update.pos_x = players[i]->x;
-                        datagram.data.update.pos_y = players[i]->y;
-
-                        if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[j], peer_addr_len) != sizeof(struct datagram_t))
-                        {
-                            perror("failed to send");
-                        }
-                    }
-                }
-            }
-        }
-
-
-        //printf("%s\n", ips[id]);
-
-        //if (sendto(sfd, buf, nread, 0, (struct sockaddr*)&peer_addr, peer_addr_len) != nread) fprintf(stderr, "Error sending response\n");
+        game_tick();
+        update_players();
+        usleep(10 * 1000);
     }
 }
 
@@ -187,9 +201,6 @@ int main(int argc, char* argv[])
 {
     int port = check_arguments(argc, argv);
     sfd = create_server(port);
-
-
-    /* Read datagrams and echo them back to sender */
 
     loop();
 
