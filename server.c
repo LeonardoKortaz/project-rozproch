@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "world.h"
 #include "communication.h"
@@ -163,37 +164,61 @@ void update_players()
                     }
                 }
             }
+            struct datagram_t datagram;
+            datagram.type = WORLD_UPDATE;
+            memcpy(datagram.data.world_update.world, world, sizeof world);
+            if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[j], peers_addr_len[j]) != sizeof(struct datagram_t))
+                perror("failed to send");
         }
     }
 }
 
-void game_tick()
+void game_tick(float delta)
 {
     for (int i = 0; i < MAX_PLAYERS; ++i)
     {
         if (players[i])
         {
             char input = player_inputs[i];
+            float speed = 100 * delta;
             if (input & UP)
-                players[i]->y--;
+                players[i]->y -= speed;
             if (input & DOWN)
-                players[i]->y++;
+                players[i]->y += speed;
             if (input & LEFT)
-                players[i]->x--;
+                players[i]->x -= speed;
             if (input & RIGHT)
-                players[i]->x++;
+                players[i]->x += speed;
+            if (input & PLACE)
+            {
+                world[(int)players[i]->y/32][(int)players[i]->x/32] = SOLID;
+                printf("%d %d %d\n", (int)players[i]->y, (int)players[i]->x, SOLID);
+            }
+            if (input & BREAK)
+            {
+                world[(int)players[i]->y/32][(int)players[i]->x/32] = EMPTY;
+                printf("%d %d %d\n", (int)players[i]->y, (int)players[i]->x, EMPTY);
+            }
         }
     }
 }
 
 void loop()
 {
+    float dt = 0.1;
+    world[0][0] = SOLID;
+    world[1][0] = WHATEVER;
+
     for (;;)
     {
+        struct timespec start, end;
+        clock_gettime(CLOCK_MONOTONIC_RAW, &start);
         handle_network();
-        game_tick();
+        game_tick(dt);
         update_players();
         usleep(10 * 1000);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+        dt = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.0;
     }
 }
 

@@ -5,8 +5,8 @@
 
 struct player_t
 {
-    int x;
-    int y;
+    float x;
+    float y;
     enum blocks selected;
 };
 

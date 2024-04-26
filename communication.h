@@ -5,13 +5,15 @@
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
+#include "world.h"
 enum data_t
 {
     JOIN_APPROVAL,
     INPUT,
     PLAYER_UPDATE,
     JOIN_REQUEST,
-    JOIN_REFUSE
+    JOIN_REFUSE,
+    WORLD_UPDATE
 };
 
 enum input_mask
@@ -19,7 +21,9 @@ enum input_mask
     LEFT = 1,
     RIGHT = 2,
     UP = 4,
-    DOWN = 8
+    DOWN = 8,
+    PLACE = 16,
+    BREAK = 32
 };
 
 struct input_data_t
@@ -55,6 +59,11 @@ struct join_refuse_t
     enum refuse_reason reason;
 };
 
+struct world_update_t
+{
+    enum blocks world[WORLD_SIZE][WORLD_SIZE];
+};
+
 union datagram_data_t
 {
     struct input_data_t input;
@@ -62,6 +71,7 @@ union datagram_data_t
     struct join_request_t request;
     struct join_approval_t approval;
     struct join_refuse_t refuse;
+    struct world_update_t world_update;
 };
 
 struct datagram_t

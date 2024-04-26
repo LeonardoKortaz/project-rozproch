@@ -9,6 +9,7 @@
 
 #include "communication.h"
 #include "player.h"
+#include "world.h"
 
 #define BUF_SIZE 500
 
@@ -16,8 +17,6 @@ int sfd;
 SDL_Renderer *renderer;
 unsigned int id;
 struct player_t* players[MAX_PLAYERS];
-int input_x;
-int input_y;
 char input;
 char finish;
 unsigned int timer;
@@ -88,8 +87,7 @@ int connect_to_server(int argc, char* argv[])
     if (create_socket(argc, argv) != 0)
         exit(EXIT_FAILURE);
 
-    char connected = 0;
-    while (!connected)
+    for (int i = 0; i < 5; i++)
     {
         struct datagram_t datagram;
         struct datagram_t response;
@@ -109,7 +107,7 @@ int connect_to_server(int argc, char* argv[])
             {
                 id = response.data.approval.id;
                 printf("connected as %d\n", id);
-                connected = 1;
+                return 0;
             }
             if (response.type == JOIN_REFUSE)
             {
@@ -118,12 +116,11 @@ int connect_to_server(int argc, char* argv[])
             }
         }
     }
+    return 1;
 }
 
-void draw()
+void draw_players()
 {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-    SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     for (int i = 0; i < MAX_PLAYERS; ++i)
     {
@@ -133,6 +130,38 @@ void draw()
             SDL_RenderDrawRect(renderer, &rect);
         }
     }
+}
+
+void draw_world()
+{
+    for (int y = 0; y < WORLD_SIZE; ++y)
+    {
+        for (int x = 0; x < WORLD_SIZE; ++x)
+        {
+            SDL_Rect rect = {x*32, y*32, 32, 32};
+            switch (world[y][x])
+            {
+            case EMPTY:
+                break;
+            case SOLID:
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+            case WHATEVER:
+                SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+            }
+        }
+    }
+}
+
+void draw()
+{
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    draw_world();
+    draw_players();
     SDL_RenderPresent(renderer);
 }
 
@@ -154,6 +183,11 @@ void update_player(struct datagram_t* datagram)
     }
 }
 
+void update_world(struct datagram_t* datagram)
+{
+    memcpy(world, datagram->data.world_update.world, sizeof world);
+}
+
 void listen_server()
 {
     struct datagram_t datagram;
@@ -162,13 +196,16 @@ void listen_server()
     while (n != -1)
     {
         n = recv(sfd, &datagram, sizeof(struct datagram_t), MSG_DONTWAIT);
-        printf("received %d\n", n);
+        //printf("received %d\n", n);
         if (n == sizeof(struct datagram_t))
         {
             switch (datagram.type)
             {
             case PLAYER_UPDATE:
                 update_player(&datagram);
+                break;
+            case WORLD_UPDATE:
+                update_world(&datagram);
                 break;
             }
         }
@@ -178,6 +215,8 @@ void listen_server()
 void handle_keys()
 {
     SDL_Event event;
+    input = input & ~PLACE;
+    input = input & ~BREAK;
     while (SDL_PollEvent(&event))
     {
         switch (event.type)
@@ -190,19 +229,21 @@ void handle_keys()
                 break ;
             case SDLK_w:
                 input = input | UP;
-                input_y = -1;
                 break ;
             case SDLK_s:
                 input = input | DOWN;
-                input_y = 1;
                 break ;
             case SDLK_a:
                 input = input | LEFT;
-                input_x = -1;
                 break ;
             case SDLK_d:
                 input = input | RIGHT;
-                input_x = 1;
+                break ;
+            case SDLK_e:
+                input = input | PLACE;
+                break ;
+            case SDLK_r:
+                input = input | BREAK;
                 break ;
             }
             break ;
@@ -211,27 +252,21 @@ void handle_keys()
             {
             case SDLK_w:
                 input = input & ~UP;
-                if (input_y == -1)
-                input_y = 0;
                 break ;
             case SDLK_s:
                 input = input & ~DOWN;
-                if (input_y == 1)
-                input_y = 0;
                 break ;
             case SDLK_a:
                 input = input & ~LEFT;
-                if (input_x == -1)
-                input_x = 0;
                 break ;
             case SDLK_d:
                 input = input & ~RIGHT;
-                if (input_x == 1)
-                input_x = 0;
                 break ;
             }
         }
     }
+    if (input & PLACE)
+        printf("place\n");
 
 
     struct datagram_t datagram;
@@ -254,7 +289,6 @@ void loop()
         handle_keys();
         draw();
         SDL_Delay(10);
-
     }
 }
 
@@ -262,7 +296,11 @@ int main(int argc, char* argv[])
 {
     printf("client lol\n");
     init_SDL();
-    connect_to_server(argc, argv);
+    if (connect_to_server(argc, argv) != 0)
+    {
+        printf("failed to connect\n");
+        exit(EXIT_FAILURE);
+    }
     loop();
 
     exit(EXIT_SUCCESS);
