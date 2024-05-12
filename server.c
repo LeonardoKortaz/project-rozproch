@@ -18,6 +18,7 @@ struct player_t* players[MAX_PLAYERS];
 char player_inputs[MAX_PLAYERS];
 struct sockaddr_storage* peers_addr[MAX_PLAYERS];
 socklen_t peers_addr_len[MAX_PLAYERS];
+int mouse_x[MAX_PLAYERS], mouse_y[MAX_PLAYERS], mouse_click[MAX_PLAYERS];
 
 // returns port
 int check_arguments(int argc, char* argv[])
@@ -87,6 +88,7 @@ void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
     players[id] = calloc(1, sizeof(struct player_t));
     players[id]->x = 0;
     players[id]->y = 0;
+    players[id]->facing = 1;
 }
 
 void handle_input(struct datagram_t datagram)
@@ -94,6 +96,9 @@ void handle_input(struct datagram_t datagram)
     unsigned int id = datagram.data.input.id;
     char input = datagram.data.input.input;
     player_inputs[id] = input;
+    mouse_x[id] = datagram.data.input.mouse_update.pos_x;
+    mouse_y[id] = datagram.data.input.mouse_update.pos_y;
+    mouse_click[id] = datagram.data.input.mouse_update.input;
 }
 
 void handle_network()
@@ -157,6 +162,7 @@ void update_players()
                     datagram.data.update.timestamp = 0;
                     datagram.data.update.pos_x = players[i]->x;
                     datagram.data.update.pos_y = players[i]->y;
+                    datagram.data.update.facing = players[i]->facing;
 
                     if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[j], peers_addr_len[j]) != sizeof(struct datagram_t))
                     {
@@ -173,31 +179,60 @@ void update_players()
     }
 }
 
+float acceleration = 0;
+
 void game_tick(float delta)
 {
     for (int i = 0; i < MAX_PLAYERS; ++i)
     {
         if (players[i])
         {
+            int on_ground = 0;
             char input = player_inputs[i];
             float speed = 100 * delta;
-            if (input & UP)
-                players[i]->y -= speed;
-            if (input & DOWN)
-                players[i]->y += speed;
-            if (input & LEFT)
-                players[i]->x -= speed;
-            if (input & RIGHT)
-                players[i]->x += speed;
+            if(world[(int)players[i]->y/BLOCK_SIZE + 1][(int)players[i]->x/BLOCK_SIZE] != SKY || world[(int)players[i]->y/BLOCK_SIZE + 1][((int)players[i]->x + 14)/BLOCK_SIZE] != SKY){
+                on_ground = 1; // check if on ground
+            }
+            if(on_ground == 1 || (float)players[i]->y == WORLD_SIZE_Y*BLOCK_SIZE){
+                acceleration = 0; // stop falling while on ground
+            }
+            if ((input & UP) && on_ground == 1){
+                acceleration = 350 * delta; // jump
+            }
+            if ((input & LEFT) && (float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)players[i]->x/BLOCK_SIZE] == SKY){
+                players[i]->x -= speed; // go left
+                players[i]->facing = 0; 
+            }
+            if ((input & RIGHT) && (int)players[i]->x/BLOCK_SIZE < WORLD_SIZE_X - 1 && world[(int)players[i]->y/BLOCK_SIZE][((int)players[i]->x + 15)/BLOCK_SIZE] == SKY){
+                players[i]->x += speed; // go right
+                players[i]->facing = 1;
+            }
             if (input & PLACE)
-            {
-                world[(int)players[i]->y/32][(int)players[i]->x/32] = SOLID;
-                printf("%d %d %d\n", (int)players[i]->y, (int)players[i]->x, SOLID);
+            {   
+                int occupied = 0;
+                if(world[mouse_y[i]][mouse_x[i]] == SKY){
+                    if(world[mouse_y[i]-1][mouse_x[i]] != SKY || world[mouse_y[i]+1][mouse_x[i]] != SKY || world[mouse_y[i]][mouse_x[i]-1] != SKY || world[mouse_y[i]][mouse_x[i]+1] != SKY){
+                        for (int j = 0; j < MAX_PLAYERS; ++j){ 
+                            if(players[j]) {
+                                if(((int)players[j]->x/BLOCK_SIZE == mouse_x[j] || (((int)players[j]->x + 15)/BLOCK_SIZE) == mouse_x[j]) && (int)players[j]->y/BLOCK_SIZE == mouse_y[j]) occupied = 1;
+                            }
+                        }
+                        if (occupied == 0) world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
+                    }
+                }
             }
             if (input & BREAK)
             {
-                world[(int)players[i]->y/32][(int)players[i]->x/32] = EMPTY;
-                printf("%d %d %d\n", (int)players[i]->y, (int)players[i]->x, EMPTY);
+                if(world[mouse_y[i]][mouse_x[i]] != SKY){
+                    world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
+                }
+            }
+            if((world[(int)(players[i]->y + 8)/BLOCK_SIZE - 1][(int)players[i]->x/BLOCK_SIZE] != SKY || world[(int)(players[i]->y + 8)/BLOCK_SIZE - 1][((int)players[i]->x + 13)/BLOCK_SIZE] != SKY) && acceleration > 0){
+                acceleration = 0; // dont jump through a block above you
+            }
+            players[i]->y -= acceleration; // power of GRAVITY
+            if (acceleration > -300 * delta && world[(int)players[i]->y/BLOCK_SIZE + 1][(int)players[i]->x/BLOCK_SIZE] == SKY){
+                acceleration -= 10 * delta; // gravity
             }
         }
     }
@@ -206,8 +241,17 @@ void game_tick(float delta)
 void loop()
 {
     float dt = 0.1;
-    world[0][0] = SOLID;
-    world[1][0] = WHATEVER;
+    
+    for(int i = 0; i < WORLD_SIZE_X; i++){ // Creating basic world with ground
+        for (int j = 0; j < WORLD_SIZE_Y-2; j++){
+            world[j][i] = SKY;
+        }
+
+        world[WORLD_SIZE_Y-1][i] = DIRT;
+        world[WORLD_SIZE_Y-2][i] = GRASS;
+    }
+
+    world[WORLD_SIZE_Y-3][WORLD_SIZE_X-5] = GRASS;
 
     for (;;)
     {

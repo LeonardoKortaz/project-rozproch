@@ -20,6 +20,7 @@ struct player_t* players[MAX_PLAYERS];
 char input;
 char finish;
 unsigned int timer;
+int mouse_x = 0, mouse_y = 0, mouse_click = 0;
 
 int create_socket(int argc, char* argv[])
 {
@@ -76,7 +77,8 @@ int create_socket(int argc, char* argv[])
 void init_SDL()
 {
     SDL_Init(SDL_INIT_EVERYTHING);
-    SDL_Window* window = SDL_CreateWindow("terraria2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1000, 800, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow("terraria2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, BLOCK_SIZE*WORLD_SIZE_X, BLOCK_SIZE*WORLD_SIZE_Y, SDL_WINDOW_SHOWN | !SDL_WINDOW_RESIZABLE);
+    SDL_SetWindowResizable(window, SDL_FALSE); // TODO: make window not resizable (idk why this doesn't work)
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_RenderClear(renderer);
     SDL_RenderPresent(renderer);
@@ -126,19 +128,26 @@ void draw_players()
     {
         if (players[i])
         {
-            SDL_Rect rect = {players[i]->x, players[i]->y, 10, 10};
-            SDL_RenderDrawRect(renderer, &rect);
+            SDL_Rect rect = {players[i]->x, players[i]->y, BLOCK_SIZE, BLOCK_SIZE};
+            SDL_QueryTexture(players[i]->texture, NULL, NULL, &rect.w, &rect.h);
+            if(players[i]->facing == 0){
+                SDL_RendererFlip flip = SDL_FLIP_HORIZONTAL;
+                SDL_RenderCopyEx(renderer, players[i]->texture, NULL, &rect, 0, NULL, flip);
+            } else {
+                SDL_RendererFlip flip = SDL_FLIP_NONE;
+                SDL_RenderCopyEx(renderer, players[i]->texture, NULL, &rect, 0, NULL, flip);
+            }
         }
     }
 }
 
 void draw_world()
 {
-    for (int y = 0; y < WORLD_SIZE; ++y)
+    for (int y = 0; y < WORLD_SIZE_Y; ++y)
     {
-        for (int x = 0; x < WORLD_SIZE; ++x)
+        for (int x = 0; x < WORLD_SIZE_X; ++x)
         {
-            SDL_Rect rect = {x*32, y*32, 32, 32};
+            SDL_Rect rect = {x*BLOCK_SIZE, y*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
             switch (world[y][x])
             {
             case EMPTY:
@@ -151,8 +160,35 @@ void draw_world()
                 SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
                 SDL_RenderFillRect(renderer, &rect);
                 break;
+            case SKY:
+                SDL_SetRenderDrawColor(renderer, SKY_COLOR);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+            case GRASS:
+                SDL_SetRenderDrawColor(renderer, GRASS_COLOR);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+            case DIRT:
+                SDL_SetRenderDrawColor(renderer, DIRT_COLOR);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+            case STONE:
+                SDL_SetRenderDrawColor(renderer, STONE_COLOR);
+                SDL_RenderFillRect(renderer, &rect);
+                break;
+
             }
         }
+    }
+    
+    if(SDL_WINDOW_MOUSE_FOCUS){
+        SDL_Rect rect = {mouse_x*WORLD_SIZE_X/2, mouse_y*WORLD_SIZE_Y/2, BLOCK_SIZE, BLOCK_SIZE};
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderDrawRect(renderer, &rect);
+    } else {
+        SDL_Rect rect = {mouse_x*WORLD_SIZE_X/2+1, mouse_y*WORLD_SIZE_Y/2+1, 0, 0};
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderDrawRect(renderer, &rect); // this shit doesnt work ( TODO: make rectangle disappear when mouse is out of range of building or not focused on the window )
     }
 }
 
@@ -173,6 +209,7 @@ void update_player(struct datagram_t* datagram)
     {
         players[id]->x = update->pos_x;
         players[id]->y = update->pos_y;
+        players[id]->facing = update->facing;
         // TODO: check timestamps
     }
     else
@@ -180,6 +217,9 @@ void update_player(struct datagram_t* datagram)
         players[id] = malloc(sizeof (struct player_t));
         players[id]->x = 100;
         players[id]->y = 100;
+        SDL_Surface* surface = SDL_LoadBMP("player.bmp"); // loads player texture (TODO: different texture depending on id)
+        players[id]->texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_FreeSurface(surface);
     }
 }
 
@@ -230,6 +270,9 @@ void handle_keys()
             case SDLK_w:
                 input = input | UP;
                 break ;
+            case SDLK_SPACE:
+                input = input | UP;
+                break ;
             case SDLK_s:
                 input = input | DOWN;
                 break ;
@@ -239,18 +282,15 @@ void handle_keys()
             case SDLK_d:
                 input = input | RIGHT;
                 break ;
-            case SDLK_e:
-                input = input | PLACE;
-                break ;
-            case SDLK_r:
-                input = input | BREAK;
-                break ;
             }
-            break ;
+            break;
         case SDL_KEYUP:
             switch (event.key.keysym.sym)
             {
             case SDLK_w:
+                input = input & ~UP;
+                break ;
+            case SDLK_SPACE:
                 input = input & ~UP;
                 break ;
             case SDLK_s:
@@ -268,12 +308,28 @@ void handle_keys()
     if (input & PLACE)
         printf("place\n");
 
+    mouse_click = SDL_GetMouseState(&mouse_x, &mouse_y);
+    mouse_x = (int)(mouse_x*2/WORLD_SIZE_X);
+    mouse_y = (int)(mouse_y*2/WORLD_SIZE_Y); //snapping mouse coords to block coords
+
+    
+    switch(mouse_click){
+        case 1:
+            input = input | PLACE;
+            break;
+        case 4:
+            input = input | BREAK;
+            break;
+    }
 
     struct datagram_t datagram;
     datagram.type = INPUT;
     datagram.data.input.id = id;
     datagram.data.input.timestamp = timer;
     datagram.data.input.input = input;
+    datagram.data.input.mouse_update.pos_x = mouse_x;
+    datagram.data.input.mouse_update.pos_y = mouse_y;
+    datagram.data.input.mouse_update.input = mouse_click;
 
     if (send(sfd, &datagram, sizeof(struct datagram_t), 0) != sizeof(struct datagram_t))
         perror("failed to send input");

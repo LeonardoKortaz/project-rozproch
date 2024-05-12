@@ -31,7 +31,15 @@ struct input_data_t
     unsigned int id;
     unsigned int timestamp;
     char input;
+    struct mouse_update_t
+    {
+        int pos_x;
+        int pos_y;
+        int input;
+    } mouse_update;
 };
+
+
 
 struct player_update_t
 {
@@ -39,6 +47,7 @@ struct player_update_t
     unsigned int timestamp;
     int pos_x;
     int pos_y;
+    int facing;
 };
 
 struct join_request_t
@@ -61,7 +70,7 @@ struct join_refuse_t
 
 struct world_update_t
 {
-    enum blocks world[WORLD_SIZE][WORLD_SIZE];
+    enum blocks world[WORLD_SIZE_Y][WORLD_SIZE_X];
 };
 
 union datagram_data_t
