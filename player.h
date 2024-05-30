@@ -11,6 +11,7 @@ struct player_t
     enum blocks selected;
     SDL_Texture* texture;
     int facing;
+    float acceleration;
 };
 
 #define MAX_PLAYERS 5

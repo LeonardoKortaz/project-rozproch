@@ -48,6 +48,8 @@ struct player_update_t
     int pos_x;
     int pos_y;
     int facing;
+    float acceleration;
+    unsigned int chosen_block;
 };
 
 struct join_request_t
