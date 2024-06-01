@@ -84,6 +84,19 @@ void init_SDL()
     SDL_RenderPresent(renderer);
 }
 
+
+SDL_Texture* textures[3];
+
+void load_textures(){
+    SDL_Surface* surface = SDL_LoadBMP("textures/grass_texture.bmp");
+    textures[0] = SDL_CreateTextureFromSurface(renderer, surface);
+    surface = SDL_LoadBMP("textures/dirt_texture.bmp");
+    textures[1] = SDL_CreateTextureFromSurface(renderer, surface);
+    surface = SDL_LoadBMP("textures/stone_texture.bmp");
+    textures[2] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+}
+
 int connect_to_server(int argc, char* argv[])
 {
     if (create_socket(argc, argv) != 0)
@@ -118,6 +131,8 @@ int connect_to_server(int argc, char* argv[])
             }
         }
     }
+
+    load_textures();
     return 1;
 }
 
@@ -140,6 +155,7 @@ void draw_players()
         }
     }
 }
+
 
 void draw_world()
 {
@@ -165,19 +181,17 @@ void draw_world()
                 SDL_RenderFillRect(renderer, &rect);
                 break;
             case GRASS:
-                SDL_SetRenderDrawColor(renderer, GRASS_COLOR);
-                SDL_RenderFillRect(renderer, &rect);
+                SDL_RenderCopy(renderer, textures[0], NULL, &rect);
                 break;
             case DIRT:
-                SDL_SetRenderDrawColor(renderer, DIRT_COLOR);
-                SDL_RenderFillRect(renderer, &rect);
+                SDL_RenderCopy(renderer, textures[1], NULL, &rect);
                 break;
             case STONE:
-                SDL_SetRenderDrawColor(renderer, STONE_COLOR);
-                SDL_RenderFillRect(renderer, &rect);
+                SDL_RenderCopy(renderer, textures[2], NULL, &rect);
                 break;
-
+            
             }
+            
         }
     }
     
@@ -196,6 +210,7 @@ void draw()
 {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
+    load_textures();
     draw_world();
     draw_players();
     SDL_RenderPresent(renderer);
@@ -217,7 +232,24 @@ void update_player(struct datagram_t* datagram)
         players[id] = malloc(sizeof (struct player_t));
         players[id]->x = 100;
         players[id]->y = 100;
-        SDL_Surface* surface = SDL_LoadBMP("player.bmp"); // loads player texture (TODO: different texture depending on id)
+        SDL_Surface* surface;
+        switch (id%5){
+            case 0:
+                surface = SDL_LoadBMP("textures/player.bmp");
+                break;
+            case 1:
+                surface = SDL_LoadBMP("textures/player1.bmp");
+                break;
+            case 2:
+                surface = SDL_LoadBMP("textures/player2.bmp");
+                break;
+            case 3:
+                surface = SDL_LoadBMP("textures/player3.bmp");
+                break;
+            case 4:
+                surface = SDL_LoadBMP("textures/player5.bmp");
+                break;
+        }
         players[id]->texture = SDL_CreateTextureFromSurface(renderer, surface);
         SDL_FreeSurface(surface);
     }

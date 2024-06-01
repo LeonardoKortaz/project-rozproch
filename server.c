@@ -201,7 +201,7 @@ void game_tick(float delta)
                 acceleration = 350 * delta; // jump
             }
             if ((input & LEFT)){
-                if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)players[i]->x/BLOCK_SIZE] == SKY){
+                if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)(players[i]->x - 2)/BLOCK_SIZE] == SKY){
                     players[i]->x -= speed; // go left
                 } else {
                     players[i]->x += speed; // collision
@@ -226,7 +226,9 @@ void game_tick(float delta)
                                 if(((int)players[j]->x/BLOCK_SIZE == mouse_x[i] || (((int)players[j]->x + 15)/BLOCK_SIZE) == mouse_x[i]) && (int)players[j]->y/BLOCK_SIZE == mouse_y[i]) occupied = 1;
                             }
                         }
-                        if (occupied == 0) world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
+                        if (occupied == 0) {
+                            world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
+                        }
                     }
                 }
             }
@@ -236,11 +238,11 @@ void game_tick(float delta)
                     world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
                 }
             }
-            if(world[(int)(players[i]->y-8)/BLOCK_SIZE + 1][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y-8)/BLOCK_SIZE + 1][((int)players[i]->x+2)/BLOCK_SIZE] != SKY && acceleration > 0){
+            if((world[(int)(players[i]->y-4)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y-4)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY) && acceleration > 0){
                 acceleration = 0; // dont jump through a block above you
             }
             players[i]->y -= acceleration; // power of GRAVITY
-            if (acceleration > -300 * delta && world[(int)players[i]->y/BLOCK_SIZE + 1][(int)players[i]->x/BLOCK_SIZE] == SKY){
+            if (acceleration > -300 * delta && on_ground == 0){
                 acceleration -= 10 * delta; // gravity
             }
             players[i]->acceleration = acceleration; // saving gravity for comms (was to lazy to edit all of them to the longer one)

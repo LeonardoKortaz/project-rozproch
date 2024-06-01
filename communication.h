@@ -73,6 +73,7 @@ struct join_refuse_t
 struct world_update_t
 {
     enum blocks world[WORLD_SIZE_Y][WORLD_SIZE_X];
+    int changed[WORLD_SIZE_Y][WORLD_SIZE_X];
 };
 
 union datagram_data_t
