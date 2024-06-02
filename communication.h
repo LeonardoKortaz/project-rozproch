@@ -8,6 +8,7 @@
 #include "world.h"
 
 #define TIMEOUT 200
+typedef unsigned int inventory_t[BLOCKS_NUM];
 
 enum data_t
 {
@@ -16,7 +17,8 @@ enum data_t
     PLAYER_UPDATE,
     JOIN_REQUEST,
     JOIN_REFUSE,
-    WORLD_UPDATE
+    WORLD_UPDATE,
+    INVENTORY_UPDATE
 };
 
 enum input_mask
@@ -55,6 +57,11 @@ struct player_update_t
     unsigned int chosen_block;
 };
 
+struct inventory_update_t
+{
+    inventory_t inventory;
+};
+
 struct join_request_t
 {};
 
@@ -87,6 +94,7 @@ union datagram_data_t
     struct join_approval_t approval;
     struct join_refuse_t refuse;
     struct world_update_t world_update;
+    struct inventory_update_t inventory_update;
 };
 
 struct datagram_t

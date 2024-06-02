@@ -17,6 +17,7 @@ int sfd;
 SDL_Renderer *renderer;
 unsigned int id;
 struct player_t* players[MAX_PLAYERS];
+inventory_t inventory;
 char input;
 char finish;
 unsigned long long timer;

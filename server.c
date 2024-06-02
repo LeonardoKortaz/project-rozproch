@@ -16,6 +16,7 @@
 int sfd;
 struct player_t* players[MAX_PLAYERS];
 char player_inputs[MAX_PLAYERS];
+inventory_t inventories[MAX_PLAYERS];
 struct sockaddr_storage* peers_addr[MAX_PLAYERS];
 socklen_t peers_addr_len[MAX_PLAYERS];
 int mouse_x[MAX_PLAYERS], mouse_y[MAX_PLAYERS], mouse_click[MAX_PLAYERS];
@@ -97,6 +98,7 @@ void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
     players[id]->facing = 1;
     players[id]->acceleration = 0;
     players[id]->last_update = timer;
+    memset(inventories[id], 1, sizeof(inventory_t));
 }
 
 void handle_input(struct datagram_t datagram)
@@ -192,75 +194,95 @@ void update_players()
     }
 }
 
+void move_player(int i, float delta)
+{
+    float acceleration = players[i]->acceleration;
+    int on_ground = 0;
+    char input = player_inputs[i];
+    float speed = 100 * delta;
+    if(world[(int)players[i]->y/BLOCK_SIZE + 1][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)players[i]->y/BLOCK_SIZE + 1][((int)players[i]->x+2)/BLOCK_SIZE] != SKY){
+        on_ground = 1; // check if on ground
+    }
+    if(on_ground == 1 || (float)players[i]->y == WORLD_SIZE_Y*BLOCK_SIZE){
+        acceleration = 0; // stop falling while on ground
+    }
+    if ((input & UP) && on_ground == 1){
+        acceleration = 350 * delta; // jump
+    }
+    if ((input & LEFT)){
+        if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)(players[i]->x)/BLOCK_SIZE] == SKY){
+            players[i]->x -= speed; // go left
+        } else {
+            players[i]->x += 0; // collision
+        }
+        players[i]->facing = 0; 
+    }
+    if ((input & RIGHT)){
+        if((int)players[i]->x/BLOCK_SIZE < WORLD_SIZE_X - 1 && world[(int)players[i]->y/BLOCK_SIZE][((int)players[i]->x + 15)/BLOCK_SIZE] == SKY){
+            players[i]->x += speed; // go right
+        } else {
+            players[i]->x -= 0; // collision
+        }
+        players[i]->facing = 1;
+    }
+}
+
+void place_block(int i)
+{
+    int occupied = 0;
+    if(world[mouse_y[i]][mouse_x[i]] == SKY){
+        if(world[mouse_y[i]-1][mouse_x[i]] != SKY || world[mouse_y[i]+1][mouse_x[i]] != SKY || world[mouse_y[i]][mouse_x[i]-1] != SKY || world[mouse_y[i]][mouse_x[i]+1] != SKY){
+            for (int j = 0; j < MAX_PLAYERS; ++j){
+                if(players[j] != NULL) {
+                    if(((int)players[j]->x/BLOCK_SIZE == mouse_x[i] || (((int)players[j]->x + 15)/BLOCK_SIZE) == mouse_x[i]) && (int)players[j]->y/BLOCK_SIZE == mouse_y[i]) occupied = 1;
+                }
+            }
+            if (occupied == 0) {
+                world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
+            }
+        }
+    }
+
+}
+
+void break_block(int i)
+{
+    if(world[mouse_y[i]][mouse_x[i]] != SKY){
+        world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
+    }
+}
+
+void update_inventory(int id)
+{
+    struct datagram_t datagram;
+    datagram.type = INVENTORY_UPDATE;
+    memcpy(datagram.data.inventory_update.inventory, inventories[id], sizeof inventories[id]);
+
+    if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[id], peers_addr_len[id]) != sizeof(struct datagram_t))
+    {
+        perror("failed to send");
+    }
+
+}
+
 void game_tick(float delta)
 {
     for (int i = 0; i < MAX_PLAYERS; ++i)
     {
         if (players[i])
         {
-            float acceleration = players[i]->acceleration;
-            int on_ground = 0;
+            move_player(i, delta);
+
             char input = player_inputs[i];
-            float speed = 100 * delta;
-            if(world[(int)players[i]->y/BLOCK_SIZE + 1][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)players[i]->y/BLOCK_SIZE + 1][((int)players[i]->x+2)/BLOCK_SIZE] != SKY){
-                on_ground = 1; // check if on ground
-            }
-            if(on_ground == 1 || (float)players[i]->y == WORLD_SIZE_Y*BLOCK_SIZE){
-                acceleration = 0; // stop falling while on ground
-            }
-            if ((input & UP) && on_ground == 1){
-                acceleration = 350 * delta; // jump
-            }
-            if ((input & LEFT)){
-                if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)(players[i]->x)/BLOCK_SIZE] == SKY){
-                    players[i]->x -= speed; // go left
-                } else {
-                    players[i]->x += 0; // collision
-                }
-                players[i]->facing = 0; 
-            }
-            if ((input & RIGHT)){
-                if((int)players[i]->x/BLOCK_SIZE < WORLD_SIZE_X - 1 && world[(int)players[i]->y/BLOCK_SIZE][((int)players[i]->x + 15)/BLOCK_SIZE] == SKY){
-                    players[i]->x += speed; // go right
-                } else {
-                    players[i]->x -= 0; // collision
-                }
-                players[i]->facing = 1;
-            }
+
             if (input & PLACE)
-            {   
-                int occupied = 0;
-                if(world[mouse_y[i]][mouse_x[i]] == SKY){
-                    if(world[mouse_y[i]-1][mouse_x[i]] != SKY || world[mouse_y[i]+1][mouse_x[i]] != SKY || world[mouse_y[i]][mouse_x[i]-1] != SKY || world[mouse_y[i]][mouse_x[i]+1] != SKY){
-                        for (int j = 0; j < MAX_PLAYERS; ++j){ 
-                            if(players[j] != NULL) {
-                                if(((int)players[j]->x/BLOCK_SIZE == mouse_x[i] || (((int)players[j]->x + 15)/BLOCK_SIZE) == mouse_x[i]) && (int)players[j]->y/BLOCK_SIZE == mouse_y[i]) occupied = 1;
-                            }
-                        }
-                        if (occupied == 0) {
-                            world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
-                        }
-                    }
-                }
+            {
+                place_block(i);
             }
             if (input & BREAK)
             {
-                if(world[mouse_y[i]][mouse_x[i]] != SKY){
-                    world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
-                }
+                break_block(i);
             }
-            if((world[(int)(players[i]->y-4)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y-4)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY) && acceleration > 0){
-                acceleration = 0; // dont jump through a block above you
-            }
-            players[i]->y -= acceleration; // power of GRAVITY
-            if (acceleration > -300 * delta && on_ground == 0){
-                acceleration -= 10 * delta; // gravity
-            }
-            if (on_ground == 1 && (world[(int)(players[i]->y+12)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y+12)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY)){
-                players[i]->y -= 8;
-                acceleration = 0;
-            }
-            players[i]->acceleration = acceleration; // saving gravity for comms (was too lazy to edit all of them to the longer one)
         }
     }
 }

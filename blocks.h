@@ -14,7 +14,8 @@ enum blocks
     SKY,
     GRASS,
     DIRT,
-    STONE
+    STONE,
+    BLOCKS_NUM
 };
 
 #endif
