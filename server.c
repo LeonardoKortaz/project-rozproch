@@ -11,6 +11,8 @@
 #include "communication.h"
 #include "player.h"
 
+#include "OpenSimplex/OpenSimplex2F.h"
+
 #define BUF_SIZE 500
 
 int sfd;
@@ -73,6 +75,18 @@ int find_id()
     return -1;
 }
 
+void update_inventory(int id)
+{
+    struct datagram_t datagram;
+    datagram.type = INVENTORY_UPDATE;
+    memcpy(datagram.data.inventory_update.inventory, inventories[id], sizeof inventories[id]);
+
+    if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[id], peers_addr_len[id]) != sizeof(struct datagram_t))
+    {
+        perror("failed to send");
+    }
+}
+
 void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
 {
     struct datagram_t datagram;
@@ -93,12 +107,13 @@ void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
     memcpy(peers_addr[id], peer_addr, sizeof *peer_addr);
     peers_addr_len[id] = peer_addr_len;
     players[id] = calloc(1, sizeof(struct player_t));
-    players[id]->x = 0;
+    players[id]->x = rand()%(BLOCK_SIZE * (WORLD_SIZE_X-1));
     players[id]->y = 0;
     players[id]->facing = 1;
     players[id]->acceleration = 0;
     players[id]->last_update = timer;
-    memset(inventories[id], 1, sizeof(inventory_t));
+    memset(inventories[id], 0, sizeof(inventory_t));
+    update_inventory(id);
 }
 
 void handle_input(struct datagram_t datagram)
@@ -112,6 +127,7 @@ void handle_input(struct datagram_t datagram)
         mouse_y[id] = datagram.data.input.mouse_update.pos_y;
         mouse_click[id] = datagram.data.input.mouse_update.input;
         players[id]->last_update = timer;
+        players[id]->selected = datagram.data.input.selected_block;
     }
 }
 
@@ -243,7 +259,10 @@ void move_player(int i, float delta)
 void place_block(int i)
 {
     int occupied = 0;
-    if(world[mouse_y[i]][mouse_x[i]] == SKY){
+    enum blocks selected = players[i]->selected;
+    if(world[mouse_y[i]][mouse_x[i]] == SKY &&
+        selected != 0 && selected != SKY &&
+        inventories[i][selected] > 0){
         if(world[mouse_y[i]-1][mouse_x[i]] != SKY || world[mouse_y[i]+1][mouse_x[i]] != SKY || world[mouse_y[i]][mouse_x[i]-1] != SKY || world[mouse_y[i]][mouse_x[i]+1] != SKY){
             for (int j = 0; j < MAX_PLAYERS; ++j){
                 if(players[j] != NULL) {
@@ -251,31 +270,21 @@ void place_block(int i)
                 }
             }
             if (occupied == 0) {
-                world[mouse_y[i]][mouse_x[i]] = STONE; // place block ( TODO: choose a block to place ) ( TODO: limit range of placement )
+                world[mouse_y[i]][mouse_x[i]] = selected; // place block ( TODO: limit range of placement )
+                inventories[i][selected] -= 1;
+                update_inventory(i);
             }
         }
     }
-
 }
 
 void break_block(int i)
 {
     if(world[mouse_y[i]][mouse_x[i]] != SKY){
+        inventories[i][world[mouse_y[i]][mouse_x[i]]] += 1;
         world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
+        update_inventory(i);
     }
-}
-
-void update_inventory(int id)
-{
-    struct datagram_t datagram;
-    datagram.type = INVENTORY_UPDATE;
-    memcpy(datagram.data.inventory_update.inventory, inventories[id], sizeof inventories[id]);
-
-    if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peers_addr[id], peers_addr_len[id]) != sizeof(struct datagram_t))
-    {
-        perror("failed to send");
-    }
-
 }
 
 void game_tick(float delta)
@@ -340,20 +349,43 @@ void handle_timeouts()
     }
 }
 
+void generate_world()
+{
+    struct OpenSimplex2F_context *simplex_context;
+    OpenSimplex2F(time(NULL), &simplex_context);
+    srand(time(NULL));
+
+    int heightmap[WORLD_SIZE_X];
+    int dirt[WORLD_SIZE_X];
+
+    for (int i = 0; i < WORLD_SIZE_X; ++i)
+    {
+        heightmap[i] = WORLD_SIZE_Y/2.0 +
+                       WORLD_SIZE_Y/4.0 * (OpenSimplex2F_noise2(simplex_context, i/100.0, 0)) +
+                       WORLD_SIZE_Y/8.0 * (OpenSimplex2F_noise2(simplex_context, 0, i/50.0)) +
+                       WORLD_SIZE_Y/16.0 * (OpenSimplex2F_noise2(simplex_context, i/10.0, -100));
+
+        dirt[i] = 3 +
+                       4 * (1+OpenSimplex2F_noise2(simplex_context, i/20.0, 100))/2.0;
+    }
+
+    for(int i = 0; i < WORLD_SIZE_X; i++){
+        for (int j = 0; j < WORLD_SIZE_Y; j++){
+            if (j < heightmap[i])
+                world[j][i] = SKY;
+            else if (j == heightmap[i])
+                world[j][i] = GRASS;
+            else if (j < heightmap[i] + dirt[i])
+                world[j][i] = DIRT;
+            else
+                world[j][i] = STONE;
+        }
+    }
+}
+
 void loop()
 {
     float dt = 0.1;
-
-    for(int i = 0; i < WORLD_SIZE_X; i++){ // Creating basic world with ground
-        for (int j = 0; j < WORLD_SIZE_Y-2; j++){
-            world[j][i] = SKY;
-        }
-
-        world[WORLD_SIZE_Y-1][i] = DIRT;
-        world[WORLD_SIZE_Y-2][i] = GRASS;
-    }
-
-    world[WORLD_SIZE_Y-3][WORLD_SIZE_X-5] = GRASS;
 
     for (;;)
     {
@@ -377,6 +409,7 @@ int main(int argc, char* argv[])
     int port = check_arguments(argc, argv);
     sfd = create_server(port);
 
+    generate_world();
     loop();
 
 }

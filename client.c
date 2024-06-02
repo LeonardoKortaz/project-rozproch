@@ -23,6 +23,7 @@ char finish;
 unsigned long long timer;
 int mouse_x = 0, mouse_y = 0, mouse_click = 0;
 unsigned int timeout;
+enum blocks selected;
 
 int create_socket(int argc, char* argv[])
 {
@@ -262,6 +263,12 @@ void update_world(struct datagram_t* datagram)
     memcpy(world, datagram->data.world_update.world, sizeof world);
 }
 
+void update_inventory(struct datagram_t* datagram)
+{
+    memcpy(inventory, datagram->data.inventory_update.inventory, sizeof inventory);
+    printf("inventory %d %d %d %d %d\n", inventory[1], inventory[2], inventory[3], inventory[4], inventory[5]);
+}
+
 void listen_server()
 {
     struct datagram_t datagram;
@@ -281,6 +288,9 @@ void listen_server()
                 break;
             case WORLD_UPDATE:
                 update_world(&datagram);
+                break;
+            case INVENTORY_UPDATE:
+                update_inventory(&datagram);
                 break;
             }
         }
@@ -365,6 +375,7 @@ void handle_keys()
     datagram.data.input.mouse_update.pos_x = mouse_x;
     datagram.data.input.mouse_update.pos_y = mouse_y;
     datagram.data.input.mouse_update.input = mouse_click;
+    datagram.data.input.selected_block = selected;
 
     if (send(sfd, &datagram, sizeof(struct datagram_t), 0) != sizeof(struct datagram_t))
         perror("failed to send input");

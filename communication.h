@@ -42,6 +42,7 @@ struct input_data_t
         int pos_y;
         int input;
     } mouse_update;
+    enum blocks selected_block;
 };
 
 
