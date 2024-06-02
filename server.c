@@ -225,6 +225,19 @@ void move_player(int i, float delta)
         }
         players[i]->facing = 1;
     }
+    if((world[(int)(players[i]->y-4)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y-4)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY) && acceleration > 0)
+    {
+                acceleration = 0; // dont jump through a block above you
+    }
+    players[i]->y -= acceleration; // power of GRAVITY
+    if (acceleration > -300 * delta && on_ground == 0){
+        acceleration -= 10 * delta; // gravity
+    }
+    if (on_ground == 1 && (world[(int)(players[i]->y+12)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y+12)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY)){
+        players[i]->y -= 8;
+        acceleration = 0;
+    }
+    players[i]->acceleration = acceleration; // saving gravity for comms (was too lazy to edit all of them to the longer one)
 }
 
 void place_block(int i)
