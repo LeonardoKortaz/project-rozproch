@@ -127,7 +127,7 @@ int connect_to_server(int argc, char* argv[])
         {
             perror("failed to send");
         }
-        usleep((500 + i)*1000);
+        usleep((500 + i * 1000)*1000);
         n = recv(sfd, &response, sizeof(struct datagram_t), MSG_DONTWAIT);
         printf("received %d\n", n);
         if (n == sizeof(struct datagram_t))
