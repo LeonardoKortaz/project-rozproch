@@ -12,6 +12,7 @@ struct player_t
     SDL_Texture* texture;
     int facing;
     float acceleration;
+    long long unsigned last_update;
 };
 
 #define MAX_PLAYERS 5

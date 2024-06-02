@@ -6,6 +6,9 @@
 #define COMMUNICATION_H
 
 #include "world.h"
+
+#define TIMEOUT 200
+
 enum data_t
 {
     JOIN_APPROVAL,

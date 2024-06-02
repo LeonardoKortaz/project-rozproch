@@ -19,8 +19,9 @@ unsigned int id;
 struct player_t* players[MAX_PLAYERS];
 char input;
 char finish;
-unsigned int timer;
+unsigned long long timer;
 int mouse_x = 0, mouse_y = 0, mouse_click = 0;
+unsigned int timeout;
 
 int create_socket(int argc, char* argv[])
 {
@@ -271,6 +272,7 @@ void listen_server()
         //printf("received %d\n", n);
         if (n == sizeof(struct datagram_t))
         {
+            timeout = TIMEOUT;
             switch (datagram.type)
             {
             case PLAYER_UPDATE:
@@ -366,16 +368,23 @@ void handle_keys()
     if (send(sfd, &datagram, sizeof(struct datagram_t), 0) != sizeof(struct datagram_t))
         perror("failed to send input");
     timer++;
-    printf("%d\n", timer);
+    //printf("%d\n", timer);
 }
 
 void loop()
 {
+    timeout = TIMEOUT;
     while (!finish)
     {
         listen_server();
         handle_keys();
         draw();
+        timeout--;
+        if (timeout == 0)
+        {
+            printf("connection lost\n");
+            return ;
+        }
         SDL_Delay(10);
     }
 }

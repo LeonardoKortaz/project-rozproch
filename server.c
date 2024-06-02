@@ -19,6 +19,7 @@ char player_inputs[MAX_PLAYERS];
 struct sockaddr_storage* peers_addr[MAX_PLAYERS];
 socklen_t peers_addr_len[MAX_PLAYERS];
 int mouse_x[MAX_PLAYERS], mouse_y[MAX_PLAYERS], mouse_click[MAX_PLAYERS];
+long long unsigned int timer = 0;
 
 // returns port
 int check_arguments(int argc, char* argv[])
@@ -76,6 +77,11 @@ void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
     struct datagram_t datagram;
     datagram.type = JOIN_APPROVAL;
     int id = find_id();
+    if (id == -1)
+    {
+        printf("no room");
+        return ;
+    }
     datagram.data.approval.id = id;
     if (sendto(sfd, &datagram, sizeof(struct datagram_t), 0, (struct sockaddr*)peer_addr, peer_addr_len) != sizeof(struct datagram_t))
     {
@@ -90,16 +96,21 @@ void handle_join(struct sockaddr_storage* peer_addr, socklen_t peer_addr_len)
     players[id]->y = 0;
     players[id]->facing = 1;
     players[id]->acceleration = 0;
+    players[id]->last_update = timer;
 }
 
 void handle_input(struct datagram_t datagram)
 {
     unsigned int id = datagram.data.input.id;
-    char input = datagram.data.input.input;
-    player_inputs[id] = input;
-    mouse_x[id] = datagram.data.input.mouse_update.pos_x;
-    mouse_y[id] = datagram.data.input.mouse_update.pos_y;
-    mouse_click[id] = datagram.data.input.mouse_update.input;
+    if (players[id])
+    {
+        char input = datagram.data.input.input;
+        player_inputs[id] = input;
+        mouse_x[id] = datagram.data.input.mouse_update.pos_x;
+        mouse_y[id] = datagram.data.input.mouse_update.pos_y;
+        mouse_click[id] = datagram.data.input.mouse_update.input;
+        players[id]->last_update = timer;
+    }
 }
 
 void handle_network()
@@ -250,10 +261,50 @@ void game_tick(float delta)
     }
 }
 
+void handle_timeouts()
+{
+    for (int i = 0; i < MAX_PLAYERS; ++i)
+    {
+        if (players[i])
+        {
+            if (timer - players[i]->last_update > TIMEOUT)
+            {
+                for (int j = 0; j < MAX_PLAYERS; j++)
+                {
+                    if (peers_addr[j] != NULL)
+                    {
+                        struct datagram_t datagram;
+                        datagram.type = PLAYER_UPDATE;
+                        datagram.data.update.id = i;
+                        datagram.data.update.timestamp = timer;
+                        datagram.data.update.pos_x = -10;
+                        datagram.data.update.pos_y = -10;
+                        datagram.data.update.facing = players[i]->facing;
+                        datagram.data.update.acceleration
+                            = players[i]->acceleration;
+
+                        if (sendto(sfd, &datagram, sizeof(struct datagram_t),
+                                   0, (struct sockaddr *)peers_addr[j],
+                                   peers_addr_len[j])
+                            != sizeof(struct datagram_t))
+                        {
+                            perror("failed to send");
+                        }
+                    }
+                }
+                free(players[i]);
+                players[i] = NULL;
+                free(peers_addr[i]);
+                peers_addr[i] = NULL;
+            }
+        }
+    }
+}
+
 void loop()
 {
     float dt = 0.1;
-    
+
     for(int i = 0; i < WORLD_SIZE_X; i++){ // Creating basic world with ground
         for (int j = 0; j < WORLD_SIZE_Y-2; j++){
             world[j][i] = SKY;
@@ -271,10 +322,14 @@ void loop()
         clock_gettime(CLOCK_MONOTONIC_RAW, &start);
         handle_network();
         game_tick(dt);
+        handle_timeouts();
         update_players();
         usleep(10 * 1000);
         clock_gettime(CLOCK_MONOTONIC_RAW, &end);
         dt = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.0;
+
+        timer++;
+//        printf("%d\n", timer);
     }
 }
 
