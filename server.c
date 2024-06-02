@@ -256,6 +256,16 @@ void move_player(int i, float delta)
     players[i]->acceleration = acceleration; // saving gravity for comms (was too lazy to edit all of them to the longer one)
 }
 
+int check_block_range(int i){
+    // printf("Mouse: %d %d | Player: %d %d\n", mouse_x[i], mouse_y[i], (int)players[i]->x/BLOCK_SIZE, (int)players[i]->y/BLOCK_SIZE);
+    if(mouse_x[i] > 0 && mouse_x[i] < WORLD_SIZE_X && mouse_y[i] > 0 && mouse_y[i] < WORLD_SIZE_Y){
+        if(mouse_x[i] < (int)(players[i]->x/BLOCK_SIZE) + 6 && mouse_x[i] > (int)(players[i]->x/BLOCK_SIZE) - 6 && mouse_y[i] < (int)(players[i]->y/BLOCK_SIZE) + 6 && mouse_y[i] > (int)(players[i]->y/BLOCK_SIZE) - 6){
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void place_block(int i)
 {
     int occupied = 0;
@@ -269,8 +279,8 @@ void place_block(int i)
                     if(((int)players[j]->x/BLOCK_SIZE == mouse_x[i] || (((int)players[j]->x + 15)/BLOCK_SIZE) == mouse_x[i]) && (int)players[j]->y/BLOCK_SIZE == mouse_y[i]) occupied = 1;
                 }
             }
-            if (occupied == 0) {
-                world[mouse_y[i]][mouse_x[i]] = selected; // place block ( TODO: limit range of placement )
+            if (occupied == 0 && check_block_range(i) == 1) {
+                world[mouse_y[i]][mouse_x[i]] = selected; // place block 
                 inventories[i][selected] -= 1;
                 update_inventory(i);
             }
@@ -280,7 +290,8 @@ void place_block(int i)
 
 void break_block(int i)
 {
-    if(world[mouse_y[i]][mouse_x[i]] != SKY){
+    int in_range = check_block_range(i);
+    if(world[mouse_y[i]][mouse_x[i]] != SKY && in_range == 1){
         inventories[i][world[mouse_y[i]][mouse_x[i]]] += 1;
         world[mouse_y[i]][mouse_x[i]] = SKY; // break block ( TODO: limit range of breaking )
         update_inventory(i);

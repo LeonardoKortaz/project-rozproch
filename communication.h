@@ -7,7 +7,7 @@
 
 #include "world.h"
 
-#define TIMEOUT 200
+#define TIMEOUT 1000
 typedef unsigned int inventory_t[BLOCKS_NUM];
 
 enum data_t

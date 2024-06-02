@@ -127,7 +127,7 @@ int connect_to_server(int argc, char* argv[])
         {
             perror("failed to send");
         }
-        usleep(500*1000);
+        usleep((500 + i)*1000);
         n = recv(sfd, &response, sizeof(struct datagram_t), MSG_DONTWAIT);
         printf("received %d\n", n);
         if (n == sizeof(struct datagram_t))
@@ -233,6 +233,15 @@ void draw_players()
     draw_ui();
 }
 
+int check_block_range(int i){
+    if(mouse_x > 0 && mouse_x < WORLD_SIZE_X && mouse_y > 0 && mouse_y < WORLD_SIZE_Y){
+        if(mouse_x < (int)(players[i]->x/BLOCK_SIZE) + 6 && mouse_x > (int)(players[i]->x/BLOCK_SIZE) - 6 && mouse_y < (int)(players[i]->y/BLOCK_SIZE) + 6 && mouse_y > (int)(players[i]->y/BLOCK_SIZE) - 6){
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void draw_world()
 {
     for (int y = 0; y < WORLD_SIZE_Y; ++y)
@@ -273,15 +282,16 @@ void draw_world()
             
         }
     }
-    
-    if(SDL_WINDOW_MOUSE_FOCUS){
-        SDL_Rect rect = {mouse_x * BLOCK_SIZE, mouse_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderDrawRect(renderer, &rect);
-    } else {
-        SDL_Rect rect = {mouse_x*WORLD_SIZE_X/2+1, mouse_y*WORLD_SIZE_Y/2+1, 0, 0};
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderDrawRect(renderer, &rect); // this shit doesnt work ( TODO: make rectangle disappear when mouse is out of range of building or not focused on the window )
+    if(check_block_range(id) == 1){
+        if(SDL_WINDOW_MOUSE_FOCUS){
+            SDL_Rect rect = {mouse_x * BLOCK_SIZE, mouse_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderDrawRect(renderer, &rect);
+        } else {
+            SDL_Rect rect = {mouse_x*WORLD_SIZE_X/2+1, mouse_y*WORLD_SIZE_Y/2+1, 0, 0};
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderDrawRect(renderer, &rect); // this shit doesnt work ( TODO: make rectangle disappear when mouse is out of range of building or not focused on the window )
+        }
     }
 }
 
