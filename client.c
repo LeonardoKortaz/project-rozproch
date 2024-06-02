@@ -151,7 +151,7 @@ int connect_to_server(int argc, char* argv[])
 
 int num_len (int n) {
     if (n < 10) return 1;
-    return 1 + num_len (n / 10);
+    return 2;
 }
 
 SDL_Surface* blocks_txt[3];
@@ -159,7 +159,8 @@ SDL_Texture* number_txt[3];
 SDL_Rect blocks_rect[3];
 SDL_Color white = {255, 255, 255};
 
-void draw_ui(){SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
+void draw_ui(){
+    SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2}; // inventory
     SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
     SDL_RenderFillRect(renderer, &rect);
     SDL_Rect rect0 = {8, 8, BLOCK_SIZE, BLOCK_SIZE};
@@ -168,7 +169,6 @@ void draw_ui(){SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
     SDL_RenderCopy(renderer, textures[1], NULL, &rect1);
     SDL_Rect rect2 = {56, 8, BLOCK_SIZE, BLOCK_SIZE};
     SDL_RenderCopy(renderer, textures[2], NULL, &rect2);
-
     
     int block_x;
 
@@ -183,11 +183,11 @@ void draw_ui(){SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
             block_x = 48;
             break;
     }
-    SDL_Rect rect3 = {8 + block_x, 8, BLOCK_SIZE, BLOCK_SIZE};
+    SDL_Rect rect3 = {8 + block_x, 8, BLOCK_SIZE, BLOCK_SIZE}; // selected block
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderDrawRect(renderer, &rect3);
 
-    if(update_required == 1){
+    if(update_required == 1){ // update number of blocks owned
         char* n = malloc(10);
         for(int i = 0; i < 3; i++){
             sprintf(n, "%d", inventory[i+4]);
@@ -207,7 +207,7 @@ void draw_ui(){SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
         free(n);
     }
 
-    for (int i = 0; i < 3; i++){
+    for (int i = 0; i < 3; i++){ // draw number of blocks owned
         SDL_RenderCopy(renderer, number_txt[i], NULL, &blocks_rect[i]);
     }
 }
