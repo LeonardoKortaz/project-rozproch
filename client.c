@@ -26,6 +26,8 @@ int mouse_x = 0, mouse_y = 0, mouse_click = 0;
 unsigned int timeout;
 enum blocks selected;
 TTF_Font* font;
+int update_required = 1;
+
 
 int create_socket(int argc, char* argv[])
 {
@@ -147,8 +149,17 @@ int connect_to_server(int argc, char* argv[])
     return 1;
 }
 
-void draw_ui(){
-    SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
+int num_len (int n) {
+    if (n < 10) return 1;
+    return 1 + num_len (n / 10);
+}
+
+SDL_Surface* blocks_txt[3];
+SDL_Texture* number_txt[3];
+SDL_Rect blocks_rect[3];
+SDL_Color white = {255, 255, 255};
+
+void draw_ui(){SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
     SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
     SDL_RenderFillRect(renderer, &rect);
     SDL_Rect rect0 = {8, 8, BLOCK_SIZE, BLOCK_SIZE};
@@ -157,6 +168,8 @@ void draw_ui(){
     SDL_RenderCopy(renderer, textures[1], NULL, &rect1);
     SDL_Rect rect2 = {56, 8, BLOCK_SIZE, BLOCK_SIZE};
     SDL_RenderCopy(renderer, textures[2], NULL, &rect2);
+
+    
     int block_x;
 
     switch (selected){
@@ -173,26 +186,30 @@ void draw_ui(){
     SDL_Rect rect3 = {8 + block_x, 8, BLOCK_SIZE, BLOCK_SIZE};
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderDrawRect(renderer, &rect3);
-}
 
-SDL_Color white = {255, 255, 255};
-void draw_inventory(){
-    char* n = malloc(10);
-    for (int i = 0; i < 3; i++){
-        sprintf(n, "%d", inventory[i+4]);
-        //printf("inventory %d %d %d %d %d %d\n", inventory[1], inventory[2], inventory[3], inventory[4], inventory[5], inventory[6]);
-        SDL_Surface* blocks0 = TTF_RenderText_Solid(font, n, white);
-        if (blocks0 == NULL){
-            printf("TTF_RenderText_Solid error: %s\n", TTF_GetError());
-            exit(EXIT_FAILURE);
+    if(update_required == 1){
+        char* n = malloc(10);
+        for(int i = 0; i < 3; i++){
+            sprintf(n, "%d", inventory[i+4]);
+            // printf("inventory %d %d %d %d %d %d\n", inventory[1], inventory[2], inventory[3], inventory[4], inventory[5], inventory[6]);
+            blocks_txt[i] = TTF_RenderText_Solid(font, n, white);
+            if (blocks_txt[i] == NULL){
+                printf("TTF_RenderText_Solid error: %s\n", TTF_GetError());
+                exit(EXIT_FAILURE);
+            }
+            number_txt[i] = SDL_CreateTextureFromSurface(renderer, blocks_txt[i]);
+            blocks_rect[i].x = 9+i*24;
+            blocks_rect[i].y = 15;
+            blocks_rect[i].w = num_len(inventory[i+4])*8;
+            blocks_rect[i].h = 10;
+            update_required = 0;
         }
-        SDL_Texture* number0 = SDL_CreateTextureFromSurface(renderer, blocks0);
-        SDL_Rect blocks0rect = {8+i*24, 16, sizeof(n)/sizeof(char), 10};
-        SDL_RenderCopy(renderer, number0, NULL, &blocks0rect);
-        SDL_DestroyTexture(number0);
-        SDL_FreeSurface(blocks0);
+        free(n);
     }
-    free(n);
+
+    for (int i = 0; i < 3; i++){
+        SDL_RenderCopy(renderer, number_txt[i], NULL, &blocks_rect[i]);
+    }
 }
 
 void draw_players()
@@ -222,6 +239,9 @@ void draw_world()
     {
         for (int x = 0; x < WORLD_SIZE_X; ++x)
         {
+            if((y == 0 && x == 0) || (y == 0 && x == 1) || (y == 0 && x == 2) || (y == 0) && (x == 3) || (y == 0 && x == 4) || 
+                (y == 1 && x == 0) || (y == 1 && x == 1) || (y == 1 && x == 2) || (y == 1 && x == 3) || (y == 1 && x == 4)) continue;
+
             SDL_Rect rect = {x*BLOCK_SIZE, y*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
             switch (world[y][x])
             {
@@ -321,7 +341,7 @@ void update_world(struct datagram_t* datagram)
 void update_inventory(struct datagram_t* datagram)
 {
     memcpy(inventory, datagram->data.inventory_update.inventory, sizeof inventory);
-    draw_inventory();
+    update_required = 1;
 }
 
 void listen_server()
