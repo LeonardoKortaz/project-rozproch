@@ -249,7 +249,7 @@ void move_player(int i, float delta)
     if (acceleration > -300 * delta && on_ground == 0){
         acceleration -= 10 * delta; // gravity
     }
-    if (on_ground == 1 && (world[(int)(players[i]->y+12)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y+12)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY)){
+    if (on_ground == 1 && (world[(int)(players[i]->y+12)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y+12)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY) && acceleration <= 0){
         players[i]->y -= 8;
         acceleration = 0;
     }

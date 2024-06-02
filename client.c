@@ -79,18 +79,6 @@ int create_socket(int argc, char* argv[])
     return 0;
 }
 
-void init_SDL()
-{
-    SDL_Init(SDL_INIT_EVERYTHING);
-    TTF_Init();
-    SDL_Window* window = SDL_CreateWindow("terraria2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, BLOCK_SIZE*WORLD_SIZE_X, BLOCK_SIZE*WORLD_SIZE_Y, SDL_WINDOW_SHOWN | !SDL_WINDOW_RESIZABLE);
-    SDL_SetWindowResizable(window, SDL_FALSE); // TODO: make window not resizable (idk why this doesn't work)
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    SDL_RenderClear(renderer);
-    SDL_RenderPresent(renderer);
-}
-
-
 SDL_Texture* textures[3];
 
 void load_textures(){
@@ -107,6 +95,18 @@ void load_textures(){
         printf("TTF_OpenFont error: %s\n", TTF_GetError());
         exit(EXIT_FAILURE);
     }
+}
+
+void init_SDL()
+{
+    SDL_Init(SDL_INIT_EVERYTHING);
+    TTF_Init();
+    SDL_Window* window = SDL_CreateWindow("terraria2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, BLOCK_SIZE*WORLD_SIZE_X, BLOCK_SIZE*WORLD_SIZE_Y, SDL_WINDOW_SHOWN | !SDL_WINDOW_RESIZABLE);
+    SDL_SetWindowResizable(window, SDL_FALSE); // TODO: make window not resizable (idk why this doesn't work)
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_RenderClear(renderer);
+    SDL_RenderPresent(renderer);
+    load_textures();
 }
 
 int connect_to_server(int argc, char* argv[])
@@ -144,7 +144,6 @@ int connect_to_server(int argc, char* argv[])
         }
     }
     selected = GRASS;
-    load_textures();
     return 1;
 }
 
@@ -180,8 +179,9 @@ SDL_Color white = {255, 255, 255};
 void draw_inventory(){
     char* n = malloc(10);
     for (int i = 0; i < 3; i++){
-        sprintf(n, "%d", inventory[i]);
-        SDL_Surface* blocks0 = TTF_RenderText_Solid(font, n, white); 
+        sprintf(n, "%d", inventory[i+4]);
+        //printf("inventory %d %d %d %d %d %d\n", inventory[1], inventory[2], inventory[3], inventory[4], inventory[5], inventory[6]);
+        SDL_Surface* blocks0 = TTF_RenderText_Solid(font, n, white);
         if (blocks0 == NULL){
             printf("TTF_RenderText_Solid error: %s\n", TTF_GetError());
             exit(EXIT_FAILURE);
@@ -255,7 +255,7 @@ void draw_world()
     }
     
     if(SDL_WINDOW_MOUSE_FOCUS){
-        SDL_Rect rect = {mouse_x*WORLD_SIZE_X/2, mouse_y*WORLD_SIZE_Y/2, BLOCK_SIZE, BLOCK_SIZE};
+        SDL_Rect rect = {mouse_x * BLOCK_SIZE, mouse_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderDrawRect(renderer, &rect);
     } else {
@@ -269,7 +269,6 @@ void draw()
 {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
-    load_textures();
     draw_world();
     draw_players();
     SDL_RenderPresent(renderer);
@@ -419,10 +418,10 @@ void handle_keys()
         printf("place\n");
 
     mouse_click = SDL_GetMouseState(&mouse_x, &mouse_y);
-    mouse_x = (int)(mouse_x*2/WORLD_SIZE_X);
-    mouse_y = (int)(mouse_y*2/WORLD_SIZE_Y); //snapping mouse coords to block coords
+    mouse_x = (int)(mouse_x / (double)BLOCK_SIZE);
+    mouse_y = (int)(mouse_y / (double)BLOCK_SIZE); //snapping mouse coords to block coords
 
-    
+
     switch(mouse_click){
         case 1:
             input = input | PLACE;
