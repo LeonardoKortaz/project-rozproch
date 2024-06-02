@@ -212,10 +212,10 @@ void game_tick(float delta)
                 acceleration = 350 * delta; // jump
             }
             if ((input & LEFT)){
-                if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)(players[i]->x - 2)/BLOCK_SIZE] == SKY){
+                if((float)players[i]->x/BLOCK_SIZE > 0 && world[(int)players[i]->y/BLOCK_SIZE][(int)(players[i]->x)/BLOCK_SIZE] == SKY){
                     players[i]->x -= speed; // go left
                 } else {
-                    players[i]->x += speed; // collision
+                    players[i]->x += 0; // collision
                 }
                 players[i]->facing = 0; 
             }
@@ -223,7 +223,7 @@ void game_tick(float delta)
                 if((int)players[i]->x/BLOCK_SIZE < WORLD_SIZE_X - 1 && world[(int)players[i]->y/BLOCK_SIZE][((int)players[i]->x + 15)/BLOCK_SIZE] == SKY){
                     players[i]->x += speed; // go right
                 } else {
-                    players[i]->x -= speed; // collision
+                    players[i]->x -= 0; // collision
                 }
                 players[i]->facing = 1;
             }
@@ -256,7 +256,11 @@ void game_tick(float delta)
             if (acceleration > -300 * delta && on_ground == 0){
                 acceleration -= 10 * delta; // gravity
             }
-            players[i]->acceleration = acceleration; // saving gravity for comms (was to lazy to edit all of them to the longer one)
+            if (on_ground == 1 && (world[(int)(players[i]->y+12)/BLOCK_SIZE][(int)(players[i]->x+10)/BLOCK_SIZE] != SKY || world[(int)(players[i]->y+12)/BLOCK_SIZE][((int)players[i]->x+2)/BLOCK_SIZE] != SKY)){
+                players[i]->y -= 8;
+                acceleration = 0;
+            }
+            players[i]->acceleration = acceleration; // saving gravity for comms (was too lazy to edit all of them to the longer one)
         }
     }
 }
