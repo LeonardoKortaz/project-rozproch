@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #include "communication.h"
 #include "player.h"
@@ -17,13 +18,14 @@ int sfd;
 SDL_Renderer *renderer;
 unsigned int id;
 struct player_t* players[MAX_PLAYERS];
-inventory_t inventory;
+inventory_t inventory = {0, 0, 0};
 char input;
 char finish;
 unsigned long long timer;
 int mouse_x = 0, mouse_y = 0, mouse_click = 0;
 unsigned int timeout;
 enum blocks selected;
+TTF_Font* font;
 
 int create_socket(int argc, char* argv[])
 {
@@ -80,6 +82,7 @@ int create_socket(int argc, char* argv[])
 void init_SDL()
 {
     SDL_Init(SDL_INIT_EVERYTHING);
+    TTF_Init();
     SDL_Window* window = SDL_CreateWindow("terraria2", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, BLOCK_SIZE*WORLD_SIZE_X, BLOCK_SIZE*WORLD_SIZE_Y, SDL_WINDOW_SHOWN | !SDL_WINDOW_RESIZABLE);
     SDL_SetWindowResizable(window, SDL_FALSE); // TODO: make window not resizable (idk why this doesn't work)
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -98,6 +101,12 @@ void load_textures(){
     surface = SDL_LoadBMP("textures/stone_texture.bmp");
     textures[2] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
+
+    font = TTF_OpenFont("textures/PixeloidMono-d94EV.ttf", 8);
+    if(font == NULL){
+        printf("TTF_OpenFont error: %s\n", TTF_GetError());
+        exit(EXIT_FAILURE);
+    }
 }
 
 int connect_to_server(int argc, char* argv[])
@@ -134,9 +143,56 @@ int connect_to_server(int argc, char* argv[])
             }
         }
     }
-
+    selected = GRASS;
     load_textures();
     return 1;
+}
+
+void draw_ui(){
+    SDL_Rect rect = {0, 0, BLOCK_SIZE*5, BLOCK_SIZE*2};
+    SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_Rect rect0 = {8, 8, BLOCK_SIZE, BLOCK_SIZE};
+    SDL_RenderCopy(renderer, textures[0], NULL, &rect0);
+    SDL_Rect rect1 = {32, 8, BLOCK_SIZE, BLOCK_SIZE};
+    SDL_RenderCopy(renderer, textures[1], NULL, &rect1);
+    SDL_Rect rect2 = {56, 8, BLOCK_SIZE, BLOCK_SIZE};
+    SDL_RenderCopy(renderer, textures[2], NULL, &rect2);
+    int block_x;
+
+    switch (selected){
+        case (GRASS):
+            block_x = 0;
+            break;
+        case (DIRT):
+            block_x = 24;
+            break;
+        case (STONE):
+            block_x = 48;
+            break;
+    }
+    SDL_Rect rect3 = {8 + block_x, 8, BLOCK_SIZE, BLOCK_SIZE};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(renderer, &rect3);
+}
+
+SDL_Color white = {255, 255, 255};
+void draw_inventory(){
+    char* n = malloc(10);
+    for (int i = 0; i < 3; i++){
+        sprintf(n, "%d", inventory[i]);
+        SDL_Surface* blocks0 = TTF_RenderText_Solid(font, n, white); 
+        if (blocks0 == NULL){
+            printf("TTF_RenderText_Solid error: %s\n", TTF_GetError());
+            exit(EXIT_FAILURE);
+        }
+        SDL_Texture* number0 = SDL_CreateTextureFromSurface(renderer, blocks0);
+        SDL_Rect blocks0rect = {8+i*24, 16, sizeof(n)/sizeof(char), 10};
+        SDL_RenderCopy(renderer, number0, NULL, &blocks0rect);
+        SDL_DestroyTexture(number0);
+        SDL_FreeSurface(blocks0);
+    }
+    free(n);
 }
 
 void draw_players()
@@ -157,8 +213,8 @@ void draw_players()
             }
         }
     }
+    draw_ui();
 }
-
 
 void draw_world()
 {
@@ -266,7 +322,7 @@ void update_world(struct datagram_t* datagram)
 void update_inventory(struct datagram_t* datagram)
 {
     memcpy(inventory, datagram->data.inventory_update.inventory, sizeof inventory);
-    printf("inventory %d %d %d %d %d\n", inventory[1], inventory[2], inventory[3], inventory[4], inventory[5]);
+    draw_inventory();
 }
 
 void listen_server()
@@ -326,6 +382,15 @@ void handle_keys()
                 break ;
             case SDLK_d:
                 input = input | RIGHT;
+                break ;
+            case SDLK_1:
+                selected = GRASS;
+                break ;
+            case SDLK_2:
+                selected = DIRT;
+                break ;
+            case SDLK_3:
+                selected = STONE;
                 break ;
             }
             break;
